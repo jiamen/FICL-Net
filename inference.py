@@ -1,6 +1,4 @@
-# Author: Chuanzhe Suo (suo_ivy@foxmail.com) 10/26/2018
-# Thanks to Mikaela Angelina Uy, modified from PointNetVLAD
-# Reference: LPD-Net: 3D Point Cloud Learning for Large-Scale Place Recognition and Environment Analysis, ICCV 2019
+# Thanks to Mikaela Angelina Uy, modified from PointNetVLAD and LPD-Net
 
 import argparse
 import os

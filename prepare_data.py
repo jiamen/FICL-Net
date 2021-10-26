@@ -1,3 +1,4 @@
+# Thanks to Mikaela Angelina Uy, modified from PointNetVLAD and LPD-Net
 import os
 import sys
 import multiprocessing as multiproc

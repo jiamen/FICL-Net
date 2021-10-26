@@ -1,6 +1,4 @@
-# Author: Chuanzhe Suo (suo_ivy@foxmail.com) 10/26/2018
-# Thanks to Mikaela Angelina Uy, modified from PointNetVLAD
-# Reference: LPD-Net: 3D Point Cloud Learning for Large-Scale Place Recognition and Environment Analysis, ICCV 2019
+# Thanks to Mikaela Angelina Uy, modified from PointNetVLAD and LPD-Net
 
 import argparse
 import importlib
@@ -21,7 +19,7 @@ from utils.loading_pointclouds import *
 from sklearn.neighbors import KDTree
 
 
-print('tf.test.is_gpu_available():', tf.test.is_gpu_available())        # 测试驱动是否正常使用
+print('tf.test.is_gpu_available():', tf.test.is_gpu_available())
 
 
 # params
@@ -34,7 +32,7 @@ parser.add_argument('--positives_per_query', type=int, default=2,
 parser.add_argument('--negatives_per_query', type=int, default=14,
                     help='Number of definite negatives in each training tuple [default: 18]')
 
-# 最大训练次数
+#
 parser.add_argument('--max_epoch', type=int, default=20, help='Epoch to run [default: 20]')
 #
 parser.add_argument('--batch_num_queries', type=int, default=1, help='Batch Size during training [default: 2]')
@@ -44,14 +42,10 @@ parser.add_argument('--optimizer', default='adam', help='adam or momentum [defau
 
 parser.add_argument('--decay_step', type=int, default=200000, help='Decay step for lr decay [default: 200000]')
 parser.add_argument('--decay_rate', type=float, default=0.7, help='Decay rate for lr decay [default: 0.7]')
-"""
-防止过拟合：权重衰减，丢弃法
-上面的两个参数定义了衰减的步数和速率
-"""
+
 parser.add_argument('--margin_1', type=float, default=0.5, help='Margin for hinge loss [default: 0.5]')
 parser.add_argument('--margin_2', type=float, default=0.2, help='Margin for hinge loss [default: 0.2]')
 
-# 不读取已经训练的模型
 parser.add_argument('--restore', type=int, default=0, help='Train with the stored model(0:No 1:Yes) [default: 0]')
 FLAGS = parser.parse_args()
 
@@ -60,7 +54,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 RESTORE = FLAGS.restore
 if not RESTORE:
-    print(tf.__version__)    #查看tensorflow版本
+    print(tf.__version__)
     MODEL = importlib.import_module(FLAGS.model)                            # import network module
     MODEL_FILE = os.path.join(ROOT_DIR, 'models', FLAGS.model + '.py')      # models = lpd_FNSF
     LOG_DIR = os.path.join(FLAGS.log_dir, FLAGS.model + time.strftime("-%y-%m-%d-%H-%M", time.localtime()))
@@ -93,11 +87,11 @@ DECAY_RATE = FLAGS.decay_rate
 MARGIN1 = FLAGS.margin_1
 MARGIN2 = FLAGS.margin_2
 
-# Generated training queries    设置已生成的 训练和测试 序列元组的文件路径
+# Generated training queries
 TRAIN_FILE = 'generating_queries/training_queries_baseline.pickle'
 TEST_FILE  = 'generating_queries/test_queries_baseline.pickle'
 
-# Load dictionary of training queries    # 读取已生成的训练和测试序列元组
+# Load dictionary of training queries
 TRAINING_QUERIES = get_queries_dict(TRAIN_FILE)
 TEST_QUERIES = get_queries_dict(TEST_FILE)
 
@@ -149,7 +143,7 @@ def train():
     with tf.Graph().as_default() as graph:
         with tf.device('/gpu:' + str(GPU_INDEX)):
             print("In Graph")
-            query = MODEL.placeholder_inputs(BATCH_NUM_QUERIES, 1, NUM_POINTS)          # BATCH_NUM_QUERIES = 1  查询
+            query = MODEL.placeholder_inputs(BATCH_NUM_QUERIES, 1, NUM_POINTS)          # BATCH_NUM_QUERIES = 1
             positives = MODEL.placeholder_inputs(BATCH_NUM_QUERIES, POSITIVES_PER_QUERY, NUM_POINTS)        # 2
             negatives = MODEL.placeholder_inputs(BATCH_NUM_QUERIES, NEGATIVES_PER_QUERY, NUM_POINTS)        # 14
             other_negatives = MODEL.placeholder_inputs(BATCH_NUM_QUERIES, 1, NUM_POINTS)                    # 1
@@ -167,13 +161,11 @@ def train():
                 vecs = tf.concat([query, positives, negatives, other_negatives], 1)
                 print('vecs: ', vecs)
                 # Tensor("query_triplets/concat:0", shape=(1, 18, 4096, 13), dtype=float32, device= / device: GPU:0)
-
-                # 网络forward，生成问询样本，正样本，负样本的问询向量
                 start = time.perf_counter()
-                out_vecs = MODEL.forward(vecs, is_training_pl, bn_decay=bn_decay)       # """ 运行一次网络 """
+                out_vecs = MODEL.forward(vecs, is_training_pl, bn_decay=bn_decay)       #
                 # output : Tensor("query_triplets/Mul_1:0", shape=(18, 256), dtype=float32, device=/device:GPU:0)
                 q_vec, pos_vecs, neg_vecs, other_neg_vec = tf.split(out_vecs,
-                                                                    [1, POSITIVES_PER_QUERY, NEGATIVES_PER_QUERY, 1], 1)    # 按行分割
+                                                                    [1, POSITIVES_PER_QUERY, NEGATIVES_PER_QUERY, 1], 1)    #
                                                                    # 1          2                    14           1
                 elapsed = time.perf_counter() - start
                 #print('Elapsed %.3f seconds.' % elapsed)
@@ -188,18 +180,17 @@ def train():
                 ##Tensor("query_triplets/split_1:3", shape=(1, 1, 256), dtype=float32, device=/device:GPU:0)
 
 
-            """ 确定损失函数：这里看注释应该试过很多，目前效果好的是惰性四元组函数 """
+
             # loss = MODEL.lazy_triplet_loss(q_vec, pos_vecs, neg_vecs, MARGIN1)
             # loss = MODEL.softmargin_loss(q_vec, pos_vecs, neg_vecs)
             # loss = MODEL.quadruplet_loss(q_vec, pos_vecs, neg_vecs, other_neg_vec, MARGIN1, MARGIN2)
-            """ 调用自定义的四元组损失函数 """
+
             loss = MODEL.lazy_quadruplet_loss(q_vec, pos_vecs, neg_vecs, other_neg_vec, MARGIN1, MARGIN2)
             tf.summary.scalar('loss', loss)
 
 
-            """ 确定优化器 """
             # Get training operator
-            learning_rate = get_learning_rate(epoch_num)            # """ 调用第一个函数：学习率衰减 """
+            learning_rate = get_learning_rate(epoch_num)
             tf.summary.scalar('learning_rate', learning_rate)
             if OPTIMIZER == 'momentum':
                 optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=MOMENTUM)
@@ -220,7 +211,7 @@ def train():
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True
         config.log_device_placement = False
-        sess = tf.Session(config=config)                # 用上面的config来 定义 这里的会话
+        sess = tf.Session(config=config)
 
 
         # Add summary writers
@@ -230,7 +221,7 @@ def train():
 
 
         # Initialize a new model
-        init = tf.global_variables_initializer()        # 用上面的config来 初始化 这里的会话
+        init = tf.global_variables_initializer()
         sess.run(init)
         print("Initialized")
 
@@ -260,10 +251,10 @@ def train():
         for epoch in range(MAX_EPOCH):
             print(epoch)
             print()
-            log_string('**** EPOCH %03d ****' % epoch)      # 打印当前训练次数
+            log_string('**** EPOCH %03d ****' % epoch)
             sys.stdout.flush()
 
-            train_one_epoch(sess, ops, train_writer, test_writer, epoch, saver)     # △△△△△△ 开始配置训练 △△△△△△
+            train_one_epoch(sess, ops, train_writer, test_writer, epoch, saver)
             # print("FLOPs after:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             # stats_graph(graph)
 
@@ -279,15 +270,13 @@ def train_one_epoch(sess, ops, train_writer, test_writer, epoch, saver):
     # which are taken from the sampled negatives
     num_to_take = 10
 
-    # Shuffle train files   训练文件的序号  np.arange函数返回一个有终点和起点的固定步长的排列，如[1,2,3,4,5]，起点是1，终点是6，步长为1。
+    # Shuffle train files
     train_file_idxs = np.arange(0, len(TRAINING_QUERIES.keys()))
-    np.random.shuffle(train_file_idxs)          # 随机化
+    np.random.shuffle(train_file_idxs)
 
 
     for i in range(len(train_file_idxs) // BATCH_NUM_QUERIES):
         batch_keys = train_file_idxs[i*BATCH_NUM_QUERIES : (i + 1)*BATCH_NUM_QUERIES]
-        # 当前批量训练的元组序号
-        #         每个元组包含{'query':.bin文件（待查询场景）, 'positives'（指定范围 内 的与该场景类似的正样例）:, 'negatives':（（指定范围 外 的与该场景类似的负样例））}
         # print("batch_keys: ", batch_keys)                   # batch_keys:  [14468]
         # print('batch_keys[0]: ', batch_keys[0])             # batch_keys[0]:  14468
         # print('BATCH_NUM_QUERIES: ', BATCH_NUM_QUERIES)     # 1
@@ -298,14 +287,12 @@ def train_one_epoch(sess, ops, train_writer, test_writer, epoch, saver):
         no_other_neg = False
         # BATCH_NUM_QUERIES = 1
         for j in range(BATCH_NUM_QUERIES):
-            # 如果当前训练场景的正样例小于  指定的阈值POSITIVES_PER_QUERY=2，报错，错误训练元组
             if len(TRAINING_QUERIES[batch_keys[j]]["positives"]) < POSITIVES_PER_QUERY:
-                              # 指定当前训练场景序号   # 正样例
                 faulty_tuple = True
                 break
 
             # print('batch_keys[0]: ', batch_keys[0])               # batch_keys[0]:  21294
-            # print('TRAINING_QUERIES[batch_keys[j]]: ', TRAINING_QUERIES[batch_keys[j]])   # 包含{问询样例，正样例，负样例}的元组
+            # print('TRAINING_QUERIES[batch_keys[j]]: ', TRAINING_QUERIES[batch_keys[j]])
             """
                 {'query': 'oxford/2015-11-12-11-22-05/featurecloud_20m_10overlap/1447328256483865.bin', 
                 'positives': [205, 435, 436, 678, ... ..., 19860, 19861, 20376, 20377, 20723], 
@@ -314,13 +301,12 @@ def train_one_epoch(sess, ops, train_writer, test_writer, epoch, saver):
             # print('TRAINING_QUERIES[batch_keys[j]]: ', TRAINING_QUERIES[batch_keys[j]]["negatives"])
 
 
-            """ 第一次运行，调用 loading_pointclouds 中的 △△△△△△ get_query_tuple △△△△△△函数 """
             # no cached feature vectors
-            if len(TRAINING_LATENT_VECTORS) == 0:       # 训练隐变量/向量 长度
+            if len(TRAINING_LATENT_VECTORS) == 0:
                 # print('1111111111111111111111')
                 q_tuples.append(
                     get_query_tuple(TRAINING_QUERIES[batch_keys[j]], POSITIVES_PER_QUERY, NEGATIVES_PER_QUERY,
-                                    TRAINING_QUERIES, hard_neg=[], other_neg=True))         # get_query_tuple()函数得到训练格式样例
+                                    TRAINING_QUERIES, hard_neg=[], other_neg=True))
                 # q_tuples.append(get_rotated_tuple(TRAINING_QUERIES[batch_keys[j]],POSITIVES_PER_QUERY,NEGATIVES_PER_QUERY, TRAINING_QUERIES, hard_neg=[], other_neg=True))
                 # q_tuples.append(get_jittered_tuple(TRAINING_QUERIES[batch_keys[j]],POSITIVES_PER_QUERY,NEGATIVES_PER_QUERY, TRAINING_QUERIES, hard_neg=[], other_neg=True))
 
@@ -337,7 +323,6 @@ def train_one_epoch(sess, ops, train_writer, test_writer, epoch, saver):
                 # q_tuples.append(get_rotated_tuple(TRAINING_QUERIES[batch_keys[j]],POSITIVES_PER_QUERY,NEGATIVES_PER_QUERY, TRAINING_QUERIES, hard_negs, other_neg=True))
                 # q_tuples.append(get_jittered_tuple(TRAINING_QUERIES[batch_keys[j]],POSITIVES_PER_QUERY,NEGATIVES_PER_QUERY, TRAINING_QUERIES, hard_negs, other_neg=True))
 
-                """ 之后运行都走这一支路 """
             else:
                 print('33333333333333333333333')
                 query = get_feature_representation(TRAINING_QUERIES[batch_keys[j]]['query'], sess, ops)
@@ -368,7 +353,6 @@ def train_one_epoch(sess, ops, train_writer, test_writer, epoch, saver):
             log_string('----' + 'NO OTHER NEG' + '-----')
             continue
 
-        # 将前面的q_tuples进行分割，取出对应问询样例、正样例、负样例、其他负样例
         queries = []
         positives = []
         negatives = []
@@ -491,7 +475,7 @@ def get_feature_representation(filename, sess, ops):
 
     output = sess.run(ops['q_vec'], feed_dict=feed_dict)
     output = output[0]
-    output = np.squeeze(output)     # 从数组的形状中删除单维度条目，即把shape中为1的维度去掉
+    output = np.squeeze(output)
     return output
 
 
@@ -510,7 +494,6 @@ def get_random_hard_negatives(query_vec, random_negs, num_to_take):
     return hard_negs
 
 
-# 运行这个函数卡住
 def get_latent_vectors(sess, ops, dict_to_process):
     is_training = False
     train_file_idxs = np.arange(0, len(dict_to_process.keys()))

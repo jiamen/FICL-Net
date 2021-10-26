@@ -1,11 +1,4 @@
-'''
-	Pre-processing: prepare_data in LPD-Net
-	generate KNN neighborhoods and calculate feature as the feature matrix of point
-	Reference: LPD-Net: 3D Point Cloud Learning for Large-Scale Place Recognition and Environment Analysis, ICCV 2019
-
-	author: Chuanzhe Suo(suo_ivy@foxmail.com)
-	created: 10/26/18
-'''
+# Thanks to Mikaela Angelina Uy, modified from PointNetVLAD and LPD-Net
 
 # !usr/bin/python
 # -*- coding: utf-8 -*-
