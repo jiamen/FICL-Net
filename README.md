@@ -19,6 +19,6 @@ The benchmark datasets introdruced in this work can be downloaded [here](https:/
 
 ### Evaluate
 
-https://drive.google.com/file/d/1apHo68hBejVmjwk02QF6dkTAjVLC2jcc/view?usp=sharing
+https://drive.google.com/file/d/1Ulf46Xc8TE9vfVVO9FmM9I9C_WI6NkOW/view?usp=sharing
 
 python evaluate.py --log_dir log/ficl_fl-21-04-24-16-05
