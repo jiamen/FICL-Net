@@ -16,3 +16,9 @@ The benchmark datasets introdruced in this work can be downloaded [here](https:/
 * Each training submap ~20m of car trajectory and subsequent submaps are ~10m apart
 * Test/Inference submaps found in the folder "pointcloud_20m/" and its corresponding csv file is "pointcloud_locations_20m.csv"
 * Test/Inference submaps are mutually disjoint
+
+### Evaluate
+
+https://drive.google.com/file/d/18_bgT2snyrEpR-Gwc3UIYQYMksaPFZe2/view?usp=sharing
+
+python evaluate.py --log_dir log/lpd_FNSF-21-04-24-16-05
